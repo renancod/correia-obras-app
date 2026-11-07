@@ -198,3 +198,11 @@ table.tab{width:100%;border-collapse:collapse;font-size:14px}
 .entrada-logo{width:64px;height:64px;margin:0 auto}
 .entrada-caixa input[type=password]{letter-spacing:.2em}
 .erro{color:var(--neg);font-size:14px;min-height:20px}
+
+/* ---------- Olho (esconder resultado) e reserva ---------- */
+.bloco-cab{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.bloco-cab h3{margin:0}
+.olho{margin:-6px -6px -6px 0}
+.olho svg{width:22px;height:22px}
+.linhas.reserva{margin-top:12px;padding-top:8px;border-top:1px dashed var(--linha)}
+.linhas.reserva dt,.linhas.reserva dd{color:var(--suave)}

@@ -68,7 +68,17 @@ const ICONES = {
   entra: '<path d="M12 19V5M5 12l7 7 7-7"/>',
   sai: '<path d="M12 5v14M5 12l7-7 7 7"/>',
   doc: '<path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><path d="M14 3v6h6M8 13h8M8 17h5"/>',
-  editar: '<path d="M4 20h4L19 9l-4-4L4 16z"/>'
+  editar: '<path d="M4 20h4L19 9l-4-4L4 16z"/>',
+  olho: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  olhoFechado: '<path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.8 9.8 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>'
+};
+
+// Valores sensíveis (resultado da obra): sempre escondidos ao abrir o app; só aparecem tocando no olho.
+// Fica só na memória de propósito: ao fechar e abrir o app, volta a esconder.
+const Privado = {
+  visivel: false,
+  valor(v) { return Privado.visivel ? U.moeda(v) : 'R$ ••••••'; },
+  alternar() { Privado.visivel = !Privado.visivel; Rota.render(); }
 };
 const ic = n => `<svg viewBox="0 0 24 24">${ICONES[n]}</svg>`;
 
@@ -101,8 +111,19 @@ const Calc = {
     // Dinheiro desta obra que está na conta hoje
     const caixa = recebido - U.soma(saidas);
 
+    // Reserva para custos extras fora de contrato: % (configurável na obra) sobre os custos previstos
+    const reservaPct = Calc.reservaPct(o);
+    const custosPrevistos = empContratado + empPagoSemEtapa + outrosCustos;
+    const reserva = Math.round(custosPrevistos * reservaPct) / 100;
+    const sobraComReserva = sobraPrevista - reserva;
+
     return { contrato, recebido, aReceber, empContratado, empPago, empAPagar, empPagoSemEtapa, outrosCustos, despEmpresa, retiradas,
-      sobraPrevista, jaRetirado, aindaDisponivel, caixa, pctRecebido: U.pct(recebido, contrato) };
+      sobraPrevista, jaRetirado, aindaDisponivel, caixa, pctRecebido: U.pct(recebido, contrato),
+      reservaPct, custosPrevistos, reserva, sobraComReserva };
+  },
+  reservaPct(o) {
+    const v = o.reservaPct;
+    return v === '' || v === undefined || v === null || isNaN(Number(v)) ? 10 : Number(v);
   },
   pagoEtapaEmp(id) { return U.soma(D.saidas.filter(s => s.etapaEmpreiteiroId === id)); },
   pagoEtapaContrato(id) { return U.soma(D.entradas.filter(e => e.etapaId === id)); },
@@ -308,11 +329,17 @@ const Telas = {
         <div class="painel painel-pad bloco"><h3>Custos da obra</h3><p class="expl">Empreiteiros, material e outros gastos da obra.</p>
           <dl class="linhas"><div><dt>Empreiteiros contratados</dt><dd>${U.moeda(c.empContratado)}</dd></div><div><dt>Já pago a empreiteiros</dt><dd>${U.moeda(c.empPago)}</dd></div>
           <div><dt>Material e outros</dt><dd>${U.moeda(c.outrosCustos)}</dd></div>
-          <div class="total"><dt>Falta pagar a empreiteiros</dt><dd>${U.moeda(c.empAPagar)}</dd></div></dl></div>
-        <div class="painel painel-pad bloco"><h3>Resultado</h3><p class="expl">Quanto a obra deixa para você.</p>
-          <dl class="linhas"><div><dt>Sobra prevista</dt><dd class="${U.sinal(c.sobraPrevista)}">${U.moeda(c.sobraPrevista)}</dd></div>
-          <div><dt>Já retirado (pessoal + empresa)</dt><dd>${U.moeda(c.jaRetirado)}</dd></div>
-          <div class="total"><dt>Ainda disponível</dt><dd class="${U.sinal(c.aindaDisponivel)}">${U.moeda(c.aindaDisponivel)}</dd></div></dl>
+          <div class="total"><dt>Falta pagar a empreiteiros</dt><dd>${U.moeda(c.empAPagar)}</dd></div></dl>
+          ${o.status === 'Finalizada' ? '' : `<dl class="linhas reserva"><div><dt>Reserva p/ extras fora do contrato (${String(c.reservaPct).replace('.', ',')}%)</dt><dd>${U.moeda(c.reserva)}</dd></div>
+          <div><dt>Custo total estimado</dt><dd>${U.moeda(c.custosPrevistos + c.reserva)}</dd></div></dl>
+          <p class="expl" style="margin-top:8px">O % da reserva se muda em Editar obra.</p>`}</div>
+        <div class="painel painel-pad bloco"><div class="bloco-cab"><h3>Resultado</h3>
+          <button class="icone olho" onclick="Privado.alternar()" aria-label="${Privado.visivel ? 'Esconder valores' : 'Mostrar valores'}" title="${Privado.visivel ? 'Esconder valores' : 'Mostrar valores'}">${ic(Privado.visivel ? 'olho' : 'olhoFechado')}</button></div>
+          <p class="expl">Quanto a obra deixa para você.</p>
+          <dl class="linhas"><div><dt>Sobra prevista</dt><dd class="${Privado.visivel ? U.sinal(c.sobraPrevista) : ''}">${Privado.valor(c.sobraPrevista)}</dd></div>
+          ${o.status === 'Finalizada' ? '' : `<div><dt>Sobra prevista com a reserva</dt><dd class="${Privado.visivel ? U.sinal(c.sobraComReserva) : ''}">${Privado.valor(c.sobraComReserva)}</dd></div>`}
+          <div><dt>Já retirado (pessoal + empresa)</dt><dd>${Privado.valor(c.jaRetirado)}</dd></div>
+          <div class="total"><dt>Ainda disponível</dt><dd class="${Privado.visivel ? U.sinal(c.aindaDisponivel) : ''}">${Privado.valor(c.aindaDisponivel)}</dd></div></dl>
           <p class="expl" style="margin-top:10px">Sobra prevista = contratado − empreiteiros − material/outros.</p></div>
       </div>
       <section class="secao" style="margin-top:24px"><div class="secao-cab"><h2>Últimos lançamentos desta obra</h2><a onclick="Filtro.obra='${o.id}';Rota.ir('lancamentos')">Ver todos</a></div>
@@ -553,6 +580,8 @@ const Form = {
         <div class="campo cheio"><label>Endereço</label><input id="oEnd" value="${U.esc(o?.endereco || '')}"></div>
         <div class="campo"><label>Início</label><input id="oIni" type="date" value="${o?.dataInicio || ''}"></div>
         <div class="campo"><label>Previsão de término</label><input id="oFim" type="date" value="${o?.dataFim || ''}"></div>
+        <div class="campo"><label>Reserva p/ custos extras (%)</label><input id="oRes" type="number" inputmode="decimal" min="0" max="50" step="0.5" value="${o ? Calc.reservaPct(o) : 10}">
+          <span class="ajuda">Estimativa de gastos fora do contrato, sobre os custos da obra. Comum: 10 a 15%.</span></div>
         <div class="campo cheio"><label>Observação</label><textarea id="oObs">${U.esc(o?.observacao || '')}</textarea></div>
         ${o ? '' : '<p class="mut cheio" style="font-size:13px;margin:0">Depois de salvar, cadastre as etapas do contrato na aba "Contrato" da obra.</p>'}
         <div class="form-acoes cheio">${o ? '<button type="button" class="btn btn-perigo" id="oExcluir">Excluir</button>' : ''}<button class="btn btn-primario btn-bloco" id="oSalvar">Salvar</button></div>
@@ -560,7 +589,7 @@ const Form = {
     fo.onsubmit = ev => {
       ev.preventDefault();
       comBotao(oSalvar, async () => {
-        const r = await salvar('obras', { id: o?.id || '', nome: oNome.value.trim(), cliente: oCli.value.trim(), telefone: oTel.value.trim(), cidade: oCid.value.trim(), endereco: oEnd.value.trim(), dataInicio: oIni.value, dataFim: oFim.value, status: oSt.value, observacao: oObs.value.trim() }, 'Obra salva.');
+        const r = await salvar('obras', { id: o?.id || '', nome: oNome.value.trim(), cliente: oCli.value.trim(), telefone: oTel.value.trim(), cidade: oCid.value.trim(), endereco: oEnd.value.trim(), dataInicio: oIni.value, dataFim: oFim.value, status: oSt.value, observacao: oObs.value.trim(), reservaPct: oRes.value === '' ? 10 : Math.max(0, Math.min(50, Number(String(oRes.value).replace(',', '.')) || 0)) }, 'Obra salva.');
         Folha.fechar();
         if (!o) Rota.ir('obra/' + r.id + '/contrato');
       });
