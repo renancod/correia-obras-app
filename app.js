@@ -517,6 +517,7 @@ const Form = {
         <div class="campo"><label>Data</label><input id="lData" type="date" required value="${reg ? reg.data : U.hoje()}"></div>
         <div class="campo"><label>Obra</label><select id="lObra">${sel(ativas.map(o => [o.id, o.nome]), obraIni)}</select></div>
         <div class="campo cheio so-s"><label>Tipo de saída</label><div class="chips" id="lTipos">${TIPOS_SAIDA.map(t => `<button type="button" data-t="${t}">${t}</button>`).join('')}</div></div>
+        <div class="campo cheio so-ret" id="lParte"></div>
         <div class="campo cheio so-e"><label>Referente à etapa do contrato</label><select id="lEtapaC"></select></div>
         <div class="campo cheio so-emp"><label>Etapa do empreiteiro</label><select id="lEtapaE"></select></div>
         <div class="campo cheio so-emp"><label>Empreiteiro</label><input id="lEmp" list="dlEmp" value="${U.esc(reg?.empreiteiro || '')}"><datalist id="dlEmp">${[...new Set(D.etapasEmpreiteiro.map(e => e.empreiteiro))].map(n => `<option value="${U.esc(n)}">`).join('')}</datalist></div>
@@ -531,6 +532,7 @@ const Form = {
       document.querySelectorAll('.so-e').forEach(el => el.hidden = modo !== 'e');
       document.querySelectorAll('.so-s').forEach(el => el.hidden = modo !== 's');
       document.querySelectorAll('.so-emp').forEach(el => el.hidden = !(modo === 's' && tipoSaida === 'Empreiteiro'));
+      minhaParte();
       const ob = lObra.value;
       const etC = D.etapasContrato.filter(e => e.obraId === ob).sort((a, b) => a.ordem - b.ordem);
       const atualC = lEtapaC.value || reg?.etapaId || '';
@@ -542,6 +544,28 @@ const Form = {
     };
     document.querySelectorAll('#fl [data-m]').forEach(b => b.onclick = () => { modo = b.dataset.m; atualiza(); });
     document.querySelectorAll('#lTipos button').forEach(b => b.onclick = () => { tipoSaida = b.dataset.t; atualiza(); });
+    // Retirada: mostra quanto ainda é seu em cada obra, para não deixar nenhuma negativa
+    const ehRetirada = () => modo === 's' && ['Retirada pessoal', 'Despesa da empresa'].includes(tipoSaida);
+    const minhaParte = () => {
+      lParte.hidden = !ehRetirada();
+      if (lParte.hidden) return;
+      const valor = U.lerValor(lValor.value);
+      const linhas = ativas.map(o => {
+        let disp = Calc.obra(o).aindaDisponivel;
+        if (reg && tipo === 's' && reg.obraId === o.id && ['Retirada pessoal', 'Despesa da empresa'].includes(reg.tipo)) disp += Number(reg.valor); // editando: devolve o valor antigo
+        const sel = o.id === lObra.value, depois = disp - (sel ? valor : 0);
+        return `<button type="button" class="parte-linha ${sel ? 'ativo' : ''}" data-obra="${o.id}">
+          <span class="parte-nome">${U.esc(o.nome)}</span>
+          <span class="parte-val ${U.sinal(disp)}">${U.moeda(disp)}</span>
+          ${sel && valor ? `<span class="parte-depois ${U.sinal(depois)}">depois desta: ${U.moeda(depois)}</span>` : ''}</button>`;
+      }).join('');
+      const s = ativas.find(o => o.id === lObra.value);
+      const dispSel = s ? (Calc.obra(s).aindaDisponivel + (reg && tipo === 's' && reg.obraId === s.id && ['Retirada pessoal', 'Despesa da empresa'].includes(reg.tipo) ? Number(reg.valor) : 0)) : 0;
+      const alerta = s && valor && dispSel - valor < 0 ? `<p class="parte-alerta">Essa retirada deixa <b>${U.esc(s.nome)}</b> negativa. Escolha outra obra ou divida o valor.</p>` : '';
+      lParte.innerHTML = `<label>Sua parte disponível em cada obra (toque para escolher)</label><div class="parte-lista">${linhas}</div>${alerta}`;
+      lParte.querySelectorAll('[data-obra]').forEach(b => b.onclick = () => { lObra.value = b.dataset.obra; lObra.onchange(); });
+    };
+    lValor.addEventListener('input', minhaParte);
     lObra.onchange = () => { lEtapaC.value = ''; lEtapaE.value = ''; atualiza(); };
     lEtapaE.onchange = () => { const e = Busca.etapaE(lEtapaE.value); if (e) lEmp.value = e.empreiteiro; };
     atualiza();
