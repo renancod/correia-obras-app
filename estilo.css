@@ -216,3 +216,64 @@ table.tab{width:100%;border-collapse:collapse;font-size:14px}
 .parte-depois{grid-column:1/-1;font-size:12.5px;color:var(--suave);text-align:right;font-variant-numeric:tabular-nums}
 .parte-depois.neg{color:var(--neg);font-weight:600}
 .parte-alerta{margin:8px 0 0;font-size:13px;color:var(--neg)}
+
+/* ---------- Início (novo) ---------- */
+.inicio-topo{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:900px){.inicio-topo{grid-template-columns:1fr}}
+.saldo-card{background:var(--escuro);color:#f1eee7;border-color:var(--escuro)}
+.saldo-rot{font-size:13px;color:#b9b5ab;font-weight:500}
+.saldo-val{font-size:32px;font-weight:700;letter-spacing:-.02em;margin:2px 0;font-variant-numeric:tabular-nums}
+.saldo-card .saldo-val.neg{color:#ff8a96}
+.saldo-ajuda{color:#a29e94!important;font-size:12.5px}
+.mes-linha{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px;padding-top:12px;border-top:1px solid rgba(255,255,255,.12)}
+.mes-linha span{display:block;font-size:11.5px;color:#a29e94}
+.mes-linha b{font-size:15px;font-variant-numeric:tabular-nums}
+.saldo-card .pos{color:#7fd6a2}
+.fechar-card .expl{margin:2px 0 8px}
+.conta{margin:0}
+.conta div{display:flex;justify-content:space-between;gap:10px;padding:5px 0;font-size:14px}
+.conta dt{color:var(--suave)} .conta dd{margin:0;font-weight:600;font-variant-numeric:tabular-nums}
+.conta .total{border-top:1px solid var(--tinta);margin-top:4px;padding-top:8px}
+.conta .total dt{color:var(--tinta);font-weight:600}
+.conta .total dd{font-size:17px}
+.sua-parte{display:flex;justify-content:space-between;margin-top:10px;padding:10px 12px;background:var(--sup2);border:1px solid var(--linha);border-radius:8px;font-size:14px}
+.sua-parte b{font-variant-numeric:tabular-nums}
+.avisos{padding:4px 0}
+.aviso-item{display:flex;gap:10px;align-items:flex-start;padding:10px 16px;color:var(--tinta);text-decoration:none;font-size:14px;border-top:1px solid var(--linha)}
+.aviso-item:first-child{border-top:0}
+.aviso-item:hover{background:var(--sup2)}
+.aviso-item .ponto{width:9px;height:9px;border-radius:50%;margin-top:6px;flex:none;background:#d9a21b}
+.aviso-item.neg .ponto{background:var(--neg)}
+
+/* ---------- Barra pela cor do risco ---------- */
+.barra.risco-ok i{background:#2e9e5b}
+.barra.risco-atencao i{background:#d9a21b}
+.barra.risco-neg i{background:var(--neg)}
+.barra.risco-fim i{background:#9aa1a8}
+.barra-legenda{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--suave);margin:-2px 0 10px}
+.risco-txt.risco-ok{color:#2e9e5b}.risco-txt.risco-atencao{color:#a57a10}.risco-txt.risco-neg{color:var(--neg)}
+.legenda-risco{font-size:12px;color:var(--suave);margin:8px 2px 0;display:flex;flex-wrap:wrap;align-items:center;gap:4px 6px}
+.legenda-risco i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-left:6px}
+.legenda-risco i:first-child{margin-left:0}
+.legenda-risco .risco-ok{background:#2e9e5b}.legenda-risco .risco-atencao{background:#d9a21b}.legenda-risco .risco-neg{background:var(--neg)}
+
+/* ---------- Lançamentos (novo) ---------- */
+.lanc-ferr{display:flex;flex-direction:column;gap:10px;margin-bottom:14px}
+.mes-nav{display:flex;align-items:center;justify-content:space-between;background:var(--sup);border:1px solid var(--linha);border-radius:var(--raio);padding:4px}
+.mes-nav .icone[disabled]{opacity:.3;pointer-events:none}
+.mes-nome{border:0;background:none;font-weight:600;font-size:15.5px;cursor:pointer;padding:8px 12px}
+.filtro-chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+.filtro-chips button{white-space:nowrap}
+.lanc-ferr .barra-ferr{margin:0}
+.lanc-ferr .barra-ferr select,.lanc-ferr .barra-ferr input{flex:1;min-width:140px}
+.lanc-resumo{margin-bottom:14px}
+.lanc-dia{display:flex;justify-content:space-between;gap:10px}
+.lanc-dia .pos,.lanc-dia .neg{font-variant-numeric:tabular-nums}
+.tag-obra{display:inline-block;font-size:11px;font-weight:600;color:var(--acento-escuro);background:#fbf1dc;border-radius:4px;padding:1px 6px;margin-right:6px;vertical-align:1px}
+.lanc-val.neg{color:var(--neg)}
+.fechar-card h3{font-size:14px;margin:0;font-weight:600}
+.fechar-card .expl{font-size:12.5px;color:var(--suave)}
+.legenda-risco{gap:4px 14px}
+.legenda-risco span{display:inline-flex;align-items:center;gap:5px;white-space:nowrap}
+.legenda-risco i{margin-left:0}
+.lanc-tit{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.3}

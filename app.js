@@ -224,80 +224,148 @@ const Rota = {
 window.addEventListener('hashchange', () => { Rota.render(); window.scrollTo(0, 0); });
 
 const Filtro = { obra: '' };
+// filtros da tela Lançamentos (ficam enquanto o app estiver aberto)
+const FiltroLanc = { mes: null, grupo: '', obra: '', texto: '' };
 
 /* ---------- Componentes de tela ---------- */
-function htmlLancamentos(lista, vazio) {
+const TIPO_GRUPO = {
+  entradas: { nome: 'Entradas', filtro: l => l._t === 'e' },
+  empreiteiros: { nome: 'Empreiteiros', filtro: l => l.tipo === 'Empreiteiro' },
+  custos: { nome: 'Material e outros', filtro: l => ['Material', 'Outros custos da obra'].includes(l.tipo) },
+  retiradas: { nome: 'Retiradas', filtro: l => ['Retirada pessoal', 'Despesa da empresa'].includes(l.tipo) }
+};
+const ehRetiradaTipo = t => ['Retirada pessoal', 'Despesa da empresa'].includes(t);
+
+function linhaLancamento(l, mostrarObra) {
+  const entrada = l._t === 'e';
+  const classe = entrada ? 'e' : (ehRetiradaTipo(l.tipo) ? 'r' : 's');
+  const obs = String(l.observacao || '').replace(/\n/g, ' · ');
+  let tit, sub;
+  if (entrada) {
+    const et = Busca.etapaC(l.etapaId);
+    tit = et ? et.descricao : 'Recebimento';
+    sub = 'Recebimento' + (obs ? ' · ' + obs : '');
+  } else if (l.tipo === 'Empreiteiro') {
+    const et = Busca.etapaE(l.etapaEmpreiteiroId);
+    tit = l.empreiteiro || 'Empreiteiro';
+    sub = (et ? et.descricao : 'Empreiteiro') + (obs ? ' · ' + obs : '');
+  } else {
+    tit = obs ? obs.split(' · ')[0] : l.tipo;
+    sub = l.tipo;
+  }
+  return `<li class="lanc" onclick="Form.lancamento('${l._t}','${l.id}')">
+    <span class="lanc-ic ${classe}">${ic(entrada ? 'entra' : 'sai')}</span>
+    <div class="lanc-txt"><div class="lanc-tit">${U.esc(tit)}</div>
+      <div class="lanc-sub">${mostrarObra ? `<span class="tag-obra">${U.esc(Busca.nomeObra(l.obraId))}</span>` : ''}${U.esc(sub)}</div></div>
+    <span class="lanc-val ${entrada ? 'pos' : classe === 'r' ? 'neg' : ''}">${entrada ? '+' : '−'} ${U.moeda(l.valor)}</span></li>`;
+}
+
+function htmlLancamentos(lista, vazio, opcoes) {
+  const op = Object.assign({ mostrarObra: true, totalDia: true }, opcoes || {});
   if (!lista.length) return `<div class="painel vazio">${vazio || 'Nenhum lançamento.'}</div>`;
-  let html = '<div class="painel"><ul class="lanc-lista">', dia = '';
-  lista.forEach(l => {
-    if (l.data !== dia) { dia = l.data; html += `<li class="lanc-dia">${U.dataLonga(dia)}</li>`; }
-    const entrada = l._t === 'e';
-    const classe = entrada ? 'e' : (['Retirada pessoal', 'Despesa da empresa'].includes(l.tipo) ? 'r' : 's');
-    let tit, sub;
-    if (entrada) {
-      const et = Busca.etapaC(l.etapaId);
-      tit = 'Recebimento' + (et ? ' · ' + et.descricao : '');
-      sub = Busca.nomeObra(l.obraId) + (l.observacao ? ' · ' + l.observacao : '');
-    } else {
-      tit = l.tipo === 'Empreiteiro' ? (l.empreiteiro || 'Empreiteiro') : (l.observacao || l.tipo);
-      sub = (l.tipo === 'Empreiteiro' ? 'Empreiteiro' : l.tipo) + ' · ' + Busca.nomeObra(l.obraId) + (l.tipo === 'Empreiteiro' && l.observacao ? ' · ' + l.observacao : '');
-    }
-    html += `<li class="lanc" onclick="Form.lancamento('${l._t}','${l.id}')">
-      <span class="lanc-ic ${classe}">${ic(entrada ? 'entra' : 'sai')}</span>
-      <div class="lanc-txt"><div class="lanc-tit">${U.esc(String(tit).split('\n')[0])}</div><div class="lanc-sub">${U.esc(String(sub).replace(/\n/g, ' · '))}</div></div>
-      <span class="lanc-val ${entrada ? 'pos' : ''}">${entrada ? '+' : '−'} ${U.moeda(l.valor)}</span></li>`;
-  });
-  return html + '</ul></div>';
+  const dias = [];
+  lista.forEach(l => { const d = dias[dias.length - 1]; if (d && d.data === l.data) d.itens.push(l); else dias.push({ data: l.data, itens: [l] }); });
+  return '<div class="painel"><ul class="lanc-lista">' + dias.map(d => {
+    const saldo = U.soma(d.itens.filter(x => x._t === 'e')) - U.soma(d.itens.filter(x => x._t === 's'));
+    return `<li class="lanc-dia"><span>${U.dataLonga(d.data)}</span>${op.totalDia ? `<span class="${saldo < 0 ? 'neg' : 'pos'}">${saldo < 0 ? '−' : '+'} ${U.moeda(Math.abs(saldo))}</span>` : ''}</li>` +
+      d.itens.map(l => linhaLancamento(l, op.mostrarObra)).join('');
+  }).join('') + '</ul></div>';
 }
 function todosLancamentos() {
   return [...D.entradas.map(e => ({ ...e, _t: 'e' })), ...D.saidas.map(s => ({ ...s, _t: 's' }))]
     .sort((a, b) => String(b.data).localeCompare(String(a.data)) || String(b.criadoEm || '').localeCompare(String(a.criadoEm || '')));
 }
 function seloStatus(s) { return `<span class="selo ${s === 'Em andamento' ? 'andamento' : s === 'Finalizada' || s === 'Concluída' ? 'ok' : 'alerta'}">${U.esc(s)}</span>`; }
+
+// Cor da barra pelo risco: verde = sua parte com folga; amarelo = perto do limite; vermelho = retirou mais que a sua parte
+const Risco = {
+  de(o, c) {
+    if (o.status === 'Finalizada') return { nivel: 'fim', rotulo: 'Finalizada' };
+    const d = c.aindaDisponivel, limite = Math.max(1000, c.sobraPrevista * 0.1);
+    if (d < 0) return { nivel: 'neg', rotulo: 'Retirado acima da sua parte' };
+    if (d < limite) return { nivel: 'atencao', rotulo: 'Perto do limite' };
+    return { nivel: 'ok', rotulo: 'Sua parte com folga' };
+  }
+};
 function cartaoObra(o) {
-  const c = Calc.obra(o);
+  const c = Calc.obra(o), r = Risco.de(o, c);
   return `<a class="painel obra-card" href="#obra/${o.id}">
     <div class="obra-topo"><div><div class="obra-nome">${U.esc(o.nome)}</div><div class="obra-cli">${U.esc(o.cliente)}${o.cidade ? ' · ' + U.esc(o.cidade) : ''}</div></div>${seloStatus(o.status)}</div>
-    <div class="barra"><i style="width:${c.pctRecebido}%"></i></div>
+    <div class="barra risco-${r.nivel}"><i style="width:${c.pctRecebido}%"></i></div>
+    <div class="barra-legenda"><span>${c.pctRecebido.toFixed(0)}% recebido</span>${Privado.visivel && r.nivel !== 'fim' ? `<span class="risco-txt risco-${r.nivel}">${r.rotulo}: ${U.moeda(c.aindaDisponivel)}</span>` : ''}</div>
     <div class="obra-nums">
       <div><span class="mut">Recebido</span><b>${U.moedaCurta(c.recebido)}</b></div>
       <div><span class="mut">Falta receber</span><b>${U.moedaCurta(c.aReceber)}</b></div>
       <div><span class="mut">Falta pagar emp.</span><b>${U.moedaCurta(c.empAPagar)}</b></div>
     </div></a>`;
 }
+function botaoOlho() {
+  return `<button class="icone olho" onclick="Privado.alternar()" aria-label="${Privado.visivel ? 'Esconder valores' : 'Mostrar valores'}" title="${Privado.visivel ? 'Esconder valores' : 'Mostrar valores'}">${ic(Privado.visivel ? 'olho' : 'olhoFechado')}</button>`;
+}
+
+// Avisos do Início: só aparece o que pede ação
+function avisos() {
+  const l = [], hoje = U.hoje();
+  D.obras.filter(o => o.status !== 'Finalizada').forEach(o => {
+    const c = Calc.obra(o), r = Risco.de(o, c);
+    if (r.nivel === 'neg') l.push({ nivel: 'neg', txt: `<b>${U.esc(o.nome)}</b>: retiradas acima da sua parte${Privado.visivel ? ` (${U.moeda(c.aindaDisponivel)})` : ''}.`, link: '#obra/' + o.id });
+    else if (r.nivel === 'atencao') l.push({ nivel: 'atencao', txt: `<b>${U.esc(o.nome)}</b>: sua parte está perto do limite${Privado.visivel ? ` (${U.moeda(c.aindaDisponivel)})` : ''}.`, link: '#obra/' + o.id });
+    D.etapasEmpreiteiro.filter(e => e.obraId === o.id && e.status !== 'Concluída' && e.prazo && e.prazo < hoje)
+      .forEach(e => l.push({ nivel: 'atencao', txt: `<b>${U.esc(e.empreiteiro)}</b> (${U.esc(e.descricao)}) passou do prazo de ${U.data(e.prazo)} · ${U.esc(o.nome)}.`, link: '#obra/' + o.id + '/empreiteiros' }));
+    D.etapasEmpreiteiro.filter(e => e.obraId === o.id && Calc.pagoEtapaEmp(e.id) > e.valor + 0.01)
+      .forEach(e => l.push({ nivel: 'neg', txt: `<b>${U.esc(e.empreiteiro)}</b> (${U.esc(e.descricao)}) recebeu ${U.moeda(Calc.pagoEtapaEmp(e.id) - e.valor)} a mais que o combinado.`, link: '#obra/' + o.id + '/empreiteiros' }));
+  });
+  return l;
+}
 
 /* ---------- Telas ---------- */
 const Telas = {
   inicio() {
     const g = Calc.geral();
-    const posicao = g.saldo + g.aReceber - g.aPagar;
+    const sobra = g.saldo + g.aReceber - g.aPagar;
     const obras = D.obras.filter(o => o.status !== 'Finalizada');
+    const suaParte = obras.reduce((s, o) => s + Calc.obra(o).aindaDisponivel, 0);
+    const av = avisos();
+    const pv = v => Privado.valor(v);
     return {
       titulo: 'Início',
       html: `
-      <section class="secao">
-        <div class="kpis">
-          <div class="kpi"><div class="kpi-rot">Saldo em conta</div><div class="kpi-val ${U.sinal(g.saldo)}">${U.moeda(g.saldo)}</div><div class="kpi-ajuda">Confira com o extrato</div></div>
-          <div class="kpi"><div class="kpi-rot">A receber de clientes</div><div class="kpi-val">${U.moeda(g.aReceber)}</div><div class="kpi-ajuda">${g.ativas} obra(s) ativa(s)</div></div>
-          <div class="kpi"><div class="kpi-rot">A pagar a empreiteiros</div><div class="kpi-val">${U.moeda(g.aPagar)}</div><div class="kpi-ajuda">Etapas em aberto</div></div>
-          <div class="kpi destaque"><div class="kpi-rot">Posição</div><div class="kpi-val ${U.sinal(posicao)}">${U.moeda(posicao)}</div><div class="kpi-ajuda">Saldo + a receber − a pagar</div></div>
+      <section class="secao inicio-topo">
+        <div class="painel painel-pad saldo-card">
+          <div class="saldo-rot">Saldo em conta</div>
+          <div class="saldo-val ${U.sinal(g.saldo)}">${U.moeda(g.saldo)}</div>
+          <div class="mut saldo-ajuda">Confira com o extrato do banco</div>
+          <div class="mes-linha">
+            <div><span>Entrou no mês</span><b class="pos">${U.moedaCurta(g.mesEntrou)}</b></div>
+            <div><span>Custos de obra</span><b>${U.moedaCurta(g.mesCustos)}</b></div>
+            <div><span>Retiradas</span><b>${U.moedaCurta(g.mesRetiradas)}</b></div>
+          </div>
+        </div>
+        <div class="painel painel-pad fechar-card">
+          <div class="bloco-cab"><h3>Para fechar as obras ativas</h3>${botaoOlho()}</div>
+          <p class="expl">Se todos os clientes pagarem e você pagar todos os empreiteiros:</p>
+          <dl class="conta">
+            <div><dt>Saldo em conta</dt><dd>${U.moeda(g.saldo)}</dd></div>
+            <div><dt>+ A receber dos clientes</dt><dd class="pos">${U.moeda(g.aReceber)}</dd></div>
+            <div><dt>− A pagar aos empreiteiros</dt><dd>${U.moeda(g.aPagar)}</dd></div>
+            <div class="total"><dt>${Privado.visivel && sobra < 0 ? 'Falta (aporte seu)' : 'Sobra'}</dt><dd class="${Privado.visivel ? U.sinal(sobra) : ''}">${pv(sobra)}</dd></div>
+          </dl>
+          <div class="sua-parte"><span>Sua parte nas obras ativas</span><b class="${Privado.visivel ? U.sinal(suaParte) : ''}">${pv(suaParte)}</b></div>
         </div>
       </section>
       <section class="secao">
-        <div class="secao-cab"><h2>Este mês</h2></div>
-        <div class="kpis tres">
-          <div class="kpi"><div class="kpi-rot">Entrou</div><div class="kpi-val pos">${U.moedaCurta(g.mesEntrou)}</div></div>
-          <div class="kpi"><div class="kpi-rot">Custos de obra</div><div class="kpi-val">${U.moedaCurta(g.mesCustos)}</div></div>
-          <div class="kpi"><div class="kpi-rot">Retiradas e empresa</div><div class="kpi-val">${U.moedaCurta(g.mesRetiradas)}</div></div>
-        </div>
+        <div class="secao-cab"><h2>Avisos</h2></div>
+        ${av.length ? `<div class="painel avisos">${av.map(a => `<a class="aviso-item ${a.nivel}" href="${a.link}"><span class="ponto"></span><span>${a.txt}</span></a>`).join('')}</div>`
+          : '<div class="painel painel-pad mut">Tudo em dia: nenhuma obra no limite e nenhum prazo vencido.</div>'}
       </section>
       <section class="secao">
         <div class="secao-cab"><h2>Obras em andamento</h2><a href="#obras">Ver todas</a></div>
         ${obras.length ? `<div class="obras-lista">${obras.map(cartaoObra).join('')}</div>` : '<div class="painel vazio">Nenhuma obra em andamento.</div>'}
+        <p class="legenda-risco"><span><i class="risco-ok"></i>sua parte com folga</span><span><i class="risco-atencao"></i>perto do limite</span><span><i class="risco-neg"></i>retirado acima</span></p>
       </section>
       <section class="secao">
         <div class="secao-cab"><h2>Últimos lançamentos</h2><a href="#lancamentos">Ver todos</a></div>
-        ${htmlLancamentos(todosLancamentos().slice(0, 8))}
+        ${htmlLancamentos(todosLancamentos().slice(0, 6), null, { totalDia: false })}
       </section>`
     };
   },
@@ -343,7 +411,7 @@ const Telas = {
           <p class="expl" style="margin-top:10px">Sobra prevista = contratado − empreiteiros − material/outros.</p></div>
       </div>
       <section class="secao" style="margin-top:24px"><div class="secao-cab"><h2>Últimos lançamentos desta obra</h2><a onclick="Filtro.obra='${o.id}';Rota.ir('lancamentos')">Ver todos</a></div>
-      ${htmlLancamentos(todosLancamentos().filter(l => l.obraId === o.id).slice(0, 6))}</section>`;
+      ${htmlLancamentos(todosLancamentos().filter(l => l.obraId === o.id).slice(0, 6), null, { mostrarObra: false, totalDia: false })}</section>`;
     }
 
     if (aba === 'contrato') {
@@ -357,7 +425,7 @@ const Telas = {
 
     if (aba === 'recebimentos') {
       const l = D.entradas.filter(e => e.obraId === o.id).map(e => ({ ...e, _t: 'e' })).sort((a, b) => b.data.localeCompare(a.data));
-      corpo = `<div class="barra-ferr"><span class="mut">${l.length} recebimento(s) · ${U.moeda(c.recebido)}</span><span class="esp"></span><button class="btn btn-primario" onclick="Form.lancamento('e',null,'${o.id}')">${ic('mais')}Novo recebimento</button></div>${htmlLancamentos(l)}`;
+      corpo = `<div class="barra-ferr"><span class="mut">${l.length} recebimento(s) · ${U.moeda(c.recebido)}</span><span class="esp"></span><button class="btn btn-primario" onclick="Form.lancamento('e',null,'${o.id}')">${ic('mais')}Novo recebimento</button></div>${htmlLancamentos(l, null, { mostrarObra: false })}`;
     }
 
     if (aba === 'gastos') {
@@ -365,7 +433,7 @@ const Telas = {
       const tot = TIPOS_SAIDA.map(t => [t, U.soma(l.filter(s => s.tipo === t))]).filter(x => x[1]);
       corpo = `<div class="painel tabela-wrap" style="margin-bottom:14px"><table class="tab"><tbody>${tot.map(([t, v]) => `<tr><td>${t}</td><td class="n">${U.moeda(v)}</td></tr>`).join('')}</tbody>
         <tfoot><tr><td>Total de saídas</td><td class="n">${U.moeda(U.soma(l))}</td></tr></tfoot></table></div>
-        <div class="barra-ferr"><span class="esp"></span><button class="btn btn-primario" onclick="Form.lancamento('s',null,'${o.id}')">${ic('mais')}Nova saída</button></div>${htmlLancamentos(l)}`;
+        <div class="barra-ferr"><span class="esp"></span><button class="btn btn-primario" onclick="Form.lancamento('s',null,'${o.id}')">${ic('mais')}Nova saída</button></div>${htmlLancamentos(l, null, { mostrarObra: false })}`;
     }
 
     if (aba === 'empreiteiros') {
@@ -392,30 +460,50 @@ const Telas = {
   },
 
   lancamentos() {
-    const meses = [...new Set(todosLancamentos().map(l => String(l.data).slice(0, 7)))].sort().reverse();
-    const nomeMes = m => { const [y, mm] = m.split('-'); return new Date(+y, +mm - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }); };
+    const F = FiltroLanc;
+    if (Filtro.obra) { F.obra = Filtro.obra; Filtro.obra = ''; F.mes = ''; F.grupo = ''; }
+    const meses = [...new Set(todosLancamentos().map(l => String(l.data).slice(0, 7)))].sort();
+    const mesPadrao = () => meses.includes(U.hoje().slice(0, 7)) ? U.hoje().slice(0, 7) : (meses[meses.length - 1] || '');
+    if (F.mes === null) F.mes = mesPadrao();
+    const nomeMes = m => { const [y, mm] = m.split('-'); const t = new Date(+y, +mm - 1, 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }); return t.charAt(0).toUpperCase() + t.slice(1); };
+    const i = meses.indexOf(F.mes);
     return {
       titulo: 'Lançamentos',
-      html: `<div class="barra-ferr">
-        <select id="fObra"><option value="">Todas as obras</option>${D.obras.map(o => `<option value="${o.id}">${U.esc(o.nome)}</option>`).join('')}</select>
-        <select id="fTipo"><option value="">Entradas e saídas</option><option value="e">Só entradas</option>${TIPOS_SAIDA.map(t => `<option>${t}</option>`).join('')}</select>
-        <select id="fMes"><option value="">Todos os meses</option>${meses.map(m => `<option value="${m}">${nomeMes(m)}</option>`).join('')}</select>
-        <input id="fTexto" type="search" placeholder="Buscar…">
-      </div><div id="resumoFiltro" class="mut" style="font-size:13px;margin:-4px 0 10px"></div><div id="listaLanc"></div>`,
+      html: `<div class="lanc-ferr">
+        <div class="mes-nav">
+          <button class="icone" id="mAnt" ${!F.mes || i <= 0 ? 'disabled' : ''} aria-label="Mês anterior"><svg viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <button class="mes-nome" id="mTodos" title="${F.mes ? 'Ver todos os meses' : 'Voltar para um mês'}">${F.mes ? nomeMes(F.mes) : 'Todos os meses'}</button>
+          <button class="icone" id="mProx" ${!F.mes || i >= meses.length - 1 ? 'disabled' : ''} aria-label="Próximo mês"><svg viewBox="0 0 24 24"><path d="M9 18l6-6-6-6"/></svg></button>
+        </div>
+        <div class="chips filtro-chips">${[['', 'Tudo'], ...Object.entries(TIPO_GRUPO).map(([k, v]) => [k, v.nome])].map(([k, n]) => `<button type="button" data-g="${k}" class="${F.grupo === k ? 'ativo' : ''}">${n}</button>`).join('')}</div>
+        <div class="barra-ferr">
+          <select id="fObra"><option value="">Todas as obras</option>${D.obras.map(o => `<option value="${o.id}" ${F.obra === o.id ? 'selected' : ''}>${U.esc(o.nome)}</option>`).join('')}</select>
+          <input id="fTexto" type="search" placeholder="Buscar na descrição…" value="${U.esc(F.texto)}">
+        </div>
+      </div>
+      <div class="kpis tres lanc-resumo" id="resumoFiltro"></div>
+      <div id="listaLanc"></div>`,
       depois() {
         const f = () => {
-          const ob = fObra.value, tp = fTipo.value, me = fMes.value, tx = fTexto.value.toLowerCase();
           let l = todosLancamentos();
-          if (ob) l = l.filter(x => x.obraId === ob);
-          if (tp === 'e') l = l.filter(x => x._t === 'e'); else if (tp) l = l.filter(x => x.tipo === tp);
-          if (me) l = l.filter(x => String(x.data).startsWith(me));
-          if (tx) l = l.filter(x => [x.observacao, x.empreiteiro, x.tipo].join(' ').toLowerCase().includes(tx));
+          if (F.obra) l = l.filter(x => x.obraId === F.obra);
+          if (F.grupo) l = l.filter(TIPO_GRUPO[F.grupo].filtro);
+          if (F.mes) l = l.filter(x => String(x.data).startsWith(F.mes));
+          const tx = F.texto.toLowerCase();
+          if (tx) l = l.filter(x => [x.observacao, x.empreiteiro, x.tipo, Busca.nomeObra(x.obraId)].join(' ').toLowerCase().includes(tx));
           const e = U.soma(l.filter(x => x._t === 'e')), s = U.soma(l.filter(x => x._t === 's'));
-          resumoFiltro.textContent = `${l.length} lançamento(s) · entradas ${U.moeda(e)} · saídas ${U.moeda(s)}`;
-          listaLanc.innerHTML = htmlLancamentos(l, 'Nada encontrado com esses filtros.');
+          resumoFiltro.innerHTML = `<div class="kpi"><div class="kpi-rot">Entrou</div><div class="kpi-val pos">${U.moedaCurta(e)}</div></div>
+            <div class="kpi"><div class="kpi-rot">Saiu</div><div class="kpi-val">${U.moedaCurta(s)}</div></div>
+            <div class="kpi"><div class="kpi-rot">Saldo · ${l.length} lanç.</div><div class="kpi-val ${U.sinal(e - s)}">${U.moedaCurta(e - s)}</div></div>`;
+          listaLanc.innerHTML = htmlLancamentos(l, 'Nada encontrado com esses filtros.', { mostrarObra: !F.obra });
         };
-        if (Filtro.obra) { fObra.value = Filtro.obra; Filtro.obra = ''; }
-        [fObra, fTipo, fMes].forEach(el => el.onchange = f); fTexto.oninput = f; f();
+        mAnt.onclick = () => { F.mes = meses[i - 1]; Rota.render(); };
+        mProx.onclick = () => { F.mes = meses[i + 1]; Rota.render(); };
+        mTodos.onclick = () => { F.mes = F.mes ? '' : mesPadrao(); Rota.render(); };
+        document.querySelectorAll('.filtro-chips [data-g]').forEach(b => b.onclick = () => { F.grupo = b.dataset.g; Rota.render(); });
+        fObra.onchange = () => { F.obra = fObra.value; f(); };
+        fTexto.oninput = () => { F.texto = fTexto.value; f(); };
+        f();
       }
     };
   },
