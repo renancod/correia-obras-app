@@ -393,7 +393,7 @@ const Telas = {
         <div class="painel painel-pad bloco"><h3>Cliente</h3><p class="expl">O que o cliente contratou e já pagou.</p>
           <dl class="linhas"><div><dt>Contratado</dt><dd>${U.moeda(c.contrato)}</dd></div><div><dt>Recebido</dt><dd class="pos">${U.moeda(c.recebido)}</dd></div>
           <div class="total"><dt>Falta receber</dt><dd>${U.moeda(c.aReceber)}</dd></div></dl>
-          <div class="barra"><i style="width:${c.pctRecebido}%"></i></div><div class="mut" style="font-size:12.5px">${c.pctRecebido.toFixed(0)}% recebido</div></div>
+          <div class="barra risco-${Risco.de(o, c).nivel}"><i style="width:${c.pctRecebido}%"></i></div><div class="barra-legenda"><span>${c.pctRecebido.toFixed(0)}% recebido</span>${Privado.visivel && o.status !== 'Finalizada' ? `<span class="risco-txt risco-${Risco.de(o, c).nivel}">${Risco.de(o, c).rotulo}</span>` : ''}</div></div>
         <div class="painel painel-pad bloco"><h3>Custos da obra</h3><p class="expl">Empreiteiros, material e outros gastos da obra.</p>
           <dl class="linhas"><div><dt>Empreiteiros contratados</dt><dd>${U.moeda(c.empContratado)}</dd></div><div><dt>Já pago a empreiteiros</dt><dd>${U.moeda(c.empPago)}</dd></div>
           <div><dt>Material e outros</dt><dd>${U.moeda(c.outrosCustos)}</dd></div>
